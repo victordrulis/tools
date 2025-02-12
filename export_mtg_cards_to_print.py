@@ -1,66 +1,74 @@
-from PIL import Image
 import os
+from PIL import Image
+import argparse
 
-# Tamanho de uma carta Magic em pixels (300 DPI)
-CARD_WIDTH = 758
-CARD_HEIGHT = 1020
-
-# Tamanho de uma folha A4 em pixels (300 DPI)
-A4_WIDTH = 2480
-A4_HEIGHT = 3508
-
-# Margens e espaçamento entre as cartas
-MARGIN_X = 50
-MARGIN_Y = 50
-SPACE_X = 10
-SPACE_Y = 10
+# Função para calcular as dimensões com base no DPI
+def calculate_dimensions(dpi):
+    # Tamanho de uma carta Magic em pixels (com base no DPI)
+    card_width = 758 * dpi / 300  # Aumenta a largura proporcionalmente ao DPI
+    card_height = 1020 * dpi / 300  # Aumenta a altura proporcionalmente ao DPI
+    
+    # Tamanho de uma folha A4 em pixels (com base no DPI)
+    a4_width = 2480 * dpi / 300  # Aumenta a largura da folha proporcionalmente ao DPI
+    a4_height = 3508 * dpi / 300  # Aumenta a altura da folha proporcionalmente ao DPI
+    
+    return card_width, card_height, a4_width, a4_height
 
 # Função para redimensionar a carta
-def resize_card(image_path):
+def resize_card(image_path, card_width, card_height):
     with Image.open(image_path) as img:
-        # Redimensiona para o tamanho da carta Magic
-        img = img.resize((CARD_WIDTH, CARD_HEIGHT), Image.LANCZOS)
+        # Redimensiona a imagem para o tamanho da carta com base no DPI
+        img = img.resize((int(card_width), int(card_height)), Image.LANCZOS)
         return img
 
 # Função para colocar cartas na folha A4
-def arrange_cards_on_a4(card_images, output_path):
+def arrange_cards_on_a4(card_images, output_path, card_width, card_height, a4_width, a4_height, margin_x, margin_y, space_x, space_y):
     # Cria uma nova imagem em branco (branco é o fundo da folha A4)
-    a4_image = Image.new("RGB", (A4_WIDTH, A4_HEIGHT), (255, 255, 255))
+    a4_image = Image.new("RGB", (int(a4_width), int(a4_height)), (255, 255, 255))
     
     # Calcula quantas cartas cabem em cada linha e coluna
-    cards_per_row = (A4_WIDTH - 2 * MARGIN_X) // (CARD_WIDTH + SPACE_X)
-    cards_per_column = (A4_HEIGHT - 2 * MARGIN_Y) // (CARD_HEIGHT + SPACE_Y)
+    cards_per_row = (a4_width - 2 * margin_x) // (card_width + space_x)
+    cards_per_column = (a4_height - 2 * margin_y) // (card_height + space_y)
     
     # Coloca as cartas na folha A4
-    x_offset = MARGIN_X
-    y_offset = MARGIN_Y
+    x_offset = margin_x
+    y_offset = margin_y
     for i, card_image in enumerate(card_images):
         if i > 0 and i % cards_per_row == 0:
             # Nova linha
-            x_offset = MARGIN_X
-            y_offset += CARD_HEIGHT + SPACE_Y
+            x_offset = margin_x
+            y_offset += card_height + space_y
         
         # Cola a imagem da carta na posição correta
-        a4_image.paste(card_image, (x_offset, y_offset))
-        x_offset += CARD_WIDTH + SPACE_X
+        a4_image.paste(card_image, (int(x_offset), int(y_offset)))
+        x_offset += card_width + space_x
     
     # Salva a imagem final como PNG
     a4_image.save(output_path)
 
 # Função principal para gerar múltiplas páginas
-def generate_magic_cards_on_a4(images_folder, output_folder):
+def generate_magic_cards_on_a4(images_folder, output_folder, dpi):
+    # Calcula as dimensões com base no DPI fornecido
+    card_width, card_height, a4_width, a4_height = calculate_dimensions(dpi)
+    
+    # Definindo as margens e espaçamento
+    margin_x = 50 * dpi / 300
+    margin_y = 50 * dpi / 300
+    space_x = 10 * dpi / 300
+    space_y = 10 * dpi / 300
+    
     # Lista de arquivos de imagem na pasta
     card_images = []
     
     for file_name in os.listdir(images_folder):
         if file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
             card_image_path = os.path.join(images_folder, file_name)
-            resized_card = resize_card(card_image_path)
+            resized_card = resize_card(card_image_path, card_width, card_height)
             card_images.append(resized_card)
     
     # Calcula quantas páginas serão necessárias
     total_cards = len(card_images)
-    cards_per_page = ((A4_WIDTH - 2 * MARGIN_X) // (CARD_WIDTH + SPACE_X)) * ((A4_HEIGHT - 2 * MARGIN_Y) // (CARD_HEIGHT + SPACE_Y))
+    cards_per_page = ((a4_width - 2 * margin_x) // (card_width + space_x)) * ((a4_height - 2 * margin_y) // (card_height + space_y))
     num_pages = (total_cards + cards_per_page - 1) // cards_per_page  # arredonda para cima
     
     # Gera uma página A4 para cada conjunto de cartas
@@ -73,12 +81,22 @@ def generate_magic_cards_on_a4(images_folder, output_folder):
         
         # Caminho para salvar a página
         output_path = os.path.join(output_folder, f"magic_cards_page_{page_num + 1}.png")
-        arrange_cards_on_a4(page_cards, output_path)
+        arrange_cards_on_a4(page_cards, output_path, card_width, card_height, a4_width, a4_height, margin_x, margin_y, space_x, space_y)
         print(f'Página {page_num + 1} gerada: {output_path}')
 
-# Exemplo de uso
-images_folder = 'imagens_cartas'  # Pasta com as imagens das cartas
-output_folder = 'saida'  # Pasta para salvar os arquivos PNG gerados
-os.makedirs(output_folder, exist_ok=True)
+# Função para processar os argumentos de linha de comando
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Gerar páginas de cartas Magic em PNG com base no DPI.")
+    parser.add_argument('dpi', type=int, help="Defina o DPI para o redimensionamento das cartas e da folha A4 (ex: 300, 600)")
+    parser.add_argument('images_folder', type=str, help="Caminho da pasta com as imagens das cartas.")
+    parser.add_argument('output_folder', type=str, help="Caminho da pasta para salvar os arquivos PNG gerados.")
+    return parser.parse_args()
 
-generate_magic_cards_on_a4(images_folder, output_folder)
+# Exemplo de uso:
+if __name__ == "__main__":
+    args = parse_arguments()
+    
+    # Cria a pasta de saída se não existir
+    os.makedirs(args.output_folder, exist_ok=True)
+    
+    generate_magic_cards_on_a4(args.images_folder, args.output_folder, args.dpi)
